@@ -33,28 +33,6 @@ export default async function buildCommand(args: Args) {
       stdio: "inherit",
     }
 
-    const swizzleExitCode = await new Promise((resolve) => {
-      spawn(
-        command,
-        [
-          "run",
-          "swizzle",
-          "docusaurus-lunr-search",
-          "SearchBar",
-          "--",
-          "--eject",
-          "--danger",
-        ],
-        spawnOptions
-      )
-        .on("exit", resolve)
-        .on("error", console.error)
-    })
-
-    if (swizzleExitCode !== 0) {
-      throw new Error("Swizzle had an non-zero exit code")
-    }
-
     const exitCode = await new Promise((resolve) => {
       spawn(
         command,

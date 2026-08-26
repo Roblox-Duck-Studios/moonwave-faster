@@ -127,7 +127,14 @@ export default function getDocusaurusConfig({
           autoSectionPath,
         },
       ],
-      "docusaurus-lunr-search",
+    ],
+    themes: [
+      [
+        "@easyops-cn/docusaurus-search-local",
+        {
+          hashed: true,
+        },
+      ],
     ],
     presets: [
       [
