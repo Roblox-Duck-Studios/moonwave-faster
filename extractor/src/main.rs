@@ -1,6 +1,6 @@
+use clap::Parser;
 use libmoonwave::{generate_docs_from_path, Args, Subcommand};
 use std::env::current_dir;
-use structopt::StructOpt;
 
 fn run(args: Args) -> anyhow::Result<()> {
     match args.subcommand {
@@ -21,7 +21,7 @@ fn run(args: Args) -> anyhow::Result<()> {
 }
 
 fn main() {
-    let args = Args::from_args();
+    let args = Args::parse();
 
     if let Err(error) = run(args) {
         eprintln!("error: {}", error);
