@@ -19,9 +19,7 @@ jobs:
         rust_version: [stable]
 
     steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: true
+    - uses: actions/checkout@v4
 
     - name: Setup Rust toolchain
       run: rustup default ${{ matrix.rust_version }}
@@ -40,3 +38,17 @@ jobs:
         cargo fmt -- --check
         cargo clippy
       if: matrix.rust_version == 'stable'
+
+  cli:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+
+    - name: Install and type-check CLI
+      working-directory: ./cli
+      run: npm ci

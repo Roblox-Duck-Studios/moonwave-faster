@@ -5,153 +5,95 @@ on:
     tags: ["*"]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  create_release:
-    name: Create Release
-    runs-on: ubuntu-22.04
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Asset names include both OS and arch so Rokit (and the npm CLI)
+          # can pick the right binary, e.g. moonwave-extractor-v1.4.3-linux-x86_64.zip
+          - label: windows-x86_64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - label: windows-aarch64
+            runner: windows-latest
+            target: aarch64-pc-windows-msvc
+          - label: macos-x86_64
+            runner: macos-latest
+            target: x86_64-apple-darwin
+          - label: macos-aarch64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+          - label: linux-x86_64
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - label: linux-aarch64
+            runner: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+
     steps:
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add ${{ matrix.target }}
+
+      - name: Build release binary
+        working-directory: ./extractor
+        run: cargo build --locked --release --target ${{ matrix.target }}
+
+      - name: Get asset name
+        shell: bash
+        run: |
+          echo "ASSET_NAME=moonwave-extractor-${GITHUB_REF_NAME}-${{ matrix.label }}" >> "$GITHUB_ENV"
+
+      - name: Zip binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: extractor/target/${{ matrix.target }}/release
+        run: Compress-Archive moonwave-extractor.exe "$env:GITHUB_WORKSPACE/$env:ASSET_NAME.zip"
+
+      - name: Zip binary (macOS / Linux)
+        if: runner.os != 'Windows'
+        working-directory: extractor/target/${{ matrix.target }}/release
+        run: zip "$GITHUB_WORKSPACE/$ASSET_NAME.zip" moonwave-extractor
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Moonwave ${{ github.ref }}
-          draft: false
-          prerelease: true
+          name: ${{ env.ASSET_NAME }}
+          path: ${{ env.ASSET_NAME }}.zip
+          if-no-files-found: error
 
-  windows:
-    needs: create_release
-    runs-on: windows-latest
-
-    steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: true
-
-    - name: Build release binary
-      working-directory: ./extractor
-      run: cargo build --verbose --locked --release
-    
-    - name: Zip up binary
-      shell: powershell
-      working-directory: extractor/target/release/
-      run: Compress-Archive moonwave-extractor.exe $env:GITHUB_WORKSPACE/release.zip
-
-    - name: Get Tag Version
-      env:
-        github_ref: ${{ github.ref }}
-      shell: bash
-      run: |
-        echo "REF=${github_ref/refs\/tags\//}" >> $GITHUB_ENV
-
-    - name: Upload Release Asset
-      id: upload-release-asset 
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create_release.outputs.upload_url }}
-        asset_path: release.zip
-        asset_name: moonwave-extractor-${{ env.REF }}-win64.zip
-        asset_content_type: application/octet-stream
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: moonwave-extractor-${{ env.REF }}-win64
-        path: extractor/target/release/moonwave-extractor.exe
-
-  macos:
-    needs: create_release
-    runs-on: macos-latest
+  release:
+    name: Create Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: true
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
 
-    - name: Install Rust
-      run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-
-    - name: Build release binary
-      working-directory: ./extractor
-      run: |
-        source $HOME/.cargo/env
-        cargo build --verbose --locked --release
-      env:
-        OPENSSL_STATIC: 1
-
-    - name: Zip up binary
-      shell: bash
-      working-directory: extractor/target/release/
-      run: zip $GITHUB_WORKSPACE/release.zip moonwave-extractor
-
-    - name: Get Tag Version
-      env:
-        github_ref: ${{ github.ref }}
-      run: |
-        echo "REF=${github_ref/refs\/tags\//}" >> $GITHUB_ENV
-
-    - name: Upload Release Asset
-      id: upload-release-asset 
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create_release.outputs.upload_url }} 
-        asset_path: release.zip
-        asset_name: moonwave-extractor-${{ env.REF }}-macos.zip
-        asset_content_type: application/octet-stream
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: moonwave-extractor-${{ env.REF }}-macos
-        path: extractor/target/release/moonwave-extractor
-
-  linux:
-    needs: create_release
-    runs-on: ubuntu-22.04
-
-    steps:
-    - uses: actions/checkout@v1
-      with:
-        submodules: true
-
-    - name: Build
-      working-directory: ./extractor
-      run: cargo build --locked --verbose --release
-      env:
-        OPENSSL_STATIC: 1
-
-    - name: Zip up binary
-      shell: bash
-      working-directory: extractor/target/release/
-      run: zip $GITHUB_WORKSPACE/release.zip moonwave-extractor
-
-    - name: Get Tag Version
-      env:
-        github_ref: ${{ github.ref }}
-      run: |
-        echo "REF=${github_ref/refs\/tags\//}" >> $GITHUB_ENV
-
-    - name: Upload Release Asset
-      id: upload-release-asset 
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ needs.create_release.outputs.upload_url }} 
-        asset_path: release.zip
-        asset_name: moonwave-extractor-${{ env.REF }}-linux.zip
-        asset_content_type: application/octet-stream
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: moonwave-extractor-${{ env.REF }}-linux
-        path: extractor/target/release/moonwave-extractor
+      # Not a prerelease: Rokit installs from the repo's "latest" release,
+      # which GitHub never points at a prerelease.
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Moonwave $GITHUB_REF_NAME" \
+            --generate-notes
