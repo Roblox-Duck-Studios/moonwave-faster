@@ -61,6 +61,11 @@ export type Config = Partial<{
     favicon: string
     organizationName: string
     projectName: string
+    future: Partial<{
+      v4: boolean | Record<string, boolean>
+      faster: boolean | Record<string, boolean>
+      [flag: string]: unknown
+    }>
   }>
 
   navbar: Partial<{

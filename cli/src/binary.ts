@@ -1,7 +1,8 @@
 import fs from "fs-extra"
-import fetch from "node-fetch"
 import os from "os"
 import path, { dirname } from "path"
+import { Readable, Stream } from "stream"
+import type { ReadableStream as WebReadableStream } from "stream/web"
 import unzipper from "unzipper"
 import { fileURLToPath } from "url"
 
@@ -25,7 +26,7 @@ interface Release {
 }
 
 export function promisifyStream(
-  stream: fs.ReadStream | fs.WriteStream
+  stream: Stream
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
     stream.on("close", resolve)
@@ -47,17 +48,50 @@ function getBinaryName(): string {
   return `moonwave-extractor${getBinaryExtension()}`
 }
 
-function getBinaryZipPattern(): RegExp | undefined {
-  switch (os.platform()) {
-    case "win32":
-      return /^moonwave-extractor(?:-|-.*-)win64.zip$/
-    case "darwin":
-      return /^moonwave-extractor(?:-|-.*-)macos.zip$/
-    case "linux":
-      return /^moonwave-extractor(?:-|-.*-)linux.zip$/
-    default:
-      return undefined
+const OS_NAMES: Record<string, string> = {
+  win32: "windows",
+  darwin: "macos",
+  linux: "linux",
+}
+
+const LEGACY_OS_NAMES: Record<string, string> = {
+  win32: "win64",
+  darwin: "macos",
+  linux: "linux",
+}
+
+const ARCH_NAMES: Record<string, string> = {
+  x64: "x86_64",
+  arm64: "aarch64",
+}
+
+const assetPattern = (suffix: string) =>
+  new RegExp(`^moonwave-extractor(?:-|-.*-)${suffix}\\.zip$`)
+
+// Release assets are named like `moonwave-extractor-v1.2.3-linux-x86_64.zip`
+// so Rokit can pick the right one. Older releases used `-win64`, `-macos` and
+// `-linux` with no arch (all x86_64 builds), which we still accept.
+// Patterns are in order of preference.
+function getBinaryZipPatterns(): RegExp[] | undefined {
+  const osName = OS_NAMES[os.platform()]
+  const archName = ARCH_NAMES[os.arch()]
+
+  if (!osName || !archName) {
+    return undefined
   }
+
+  const patterns = [assetPattern(`${osName}-${archName}`)]
+
+  // Apple Silicon and Windows on ARM can both run x86_64 builds
+  if (archName === "aarch64" && osName !== "linux") {
+    patterns.push(assetPattern(`${osName}-x86_64`))
+  }
+
+  if (archName === "x86_64" || osName !== "linux") {
+    patterns.push(assetPattern(LEGACY_OS_NAMES[os.platform()]))
+  }
+
+  return patterns
 }
 
 async function downloadBinary(binaryPath: string) {
@@ -77,13 +111,17 @@ async function downloadBinary(binaryPath: string) {
   )
 
   const assets = release.assets
-  const zipPattern = getBinaryZipPattern()
+  const zipPatterns = getBinaryZipPatterns()
 
-  if (!zipPattern) {
-    throw new Error(`Your platform is unsupported: ${os.platform}`)
+  if (!zipPatterns) {
+    throw new Error(
+      `Your platform is unsupported: ${os.platform()} ${os.arch()}`
+    )
   }
 
-  const targetAsset = assets.find((asset) => asset.name.match(zipPattern))
+  const targetAsset = zipPatterns
+    .map((pattern) => assets.find((asset) => pattern.test(asset.name)))
+    .find((asset) => asset !== undefined)
 
   if (!targetAsset) {
     throw new Error("Release does not contain a binary for this platform")
@@ -97,7 +135,7 @@ async function downloadBinary(binaryPath: string) {
 
   const writeStream = fs.createWriteStream(binaryPath)
 
-  const unzip = download.body.pipe(
+  const unzip = Readable.fromWeb(download.body as WebReadableStream).pipe(
     unzipper.ParseOne(new RegExp(getBinaryName()), {})
   )
 
@@ -118,11 +156,17 @@ async function downloadBinary(binaryPath: string) {
 }
 
 export async function getBinaryPath() {
+  // Use your own extractor instead of downloading one, e.g. one installed
+  // with Rokit: MOONWAVE_EXTRACTOR_PATH=moonwave-extractor moonwave build
+  const customPath = process.env.MOONWAVE_EXTRACTOR_PATH
+  if (customPath) {
+    console.log(`Moonwave: Using extractor at: ${customPath}`)
+    return customPath
+  }
+
   if (process.env.MOONWAVE_DEV) {
-    const extractorPath =
-      process.env.MOONWAVE_EXTRACTOR_PATH || "moonwave-extractor"
-    console.log(`Moonwave: Using development extractor path: ${extractorPath}`)
-    return extractorPath
+    console.log("Moonwave: Using development extractor: moonwave-extractor")
+    return "moonwave-extractor"
   }
 
   const binFolder = path.join(__dirname, "bin")
