@@ -11,7 +11,19 @@ module.exports = {
   url: "https://eryn.io",
   baseUrl: "/moonwave/",
   onBrokenLinks: "throw",
-  onBrokenMarkdownLinks: "warn",
+  markdown: {
+    hooks: {
+      onBrokenMarkdownLinks: "warn",
+    },
+  },
+
+  // Docusaurus Faster: build with Rspack + SWC instead of webpack + Babel
+  future: {
+    v4: {
+      removeLegacyPostBuildHeadAttribute: true,
+    },
+    faster: true,
+  },
   favicon: "img/favicon.ico",
   organizationName: "evaera", // Usually your GitHub org/user name.
   projectName: "moonwave", // Usually your repo name.
