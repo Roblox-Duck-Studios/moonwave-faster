@@ -303,8 +303,13 @@ fn determine_kind(
                                 ast::Suffix::Index(index) => match index {
                                     ast::Index::Brackets {
                                         brackets: _,
-                                        expression: ast::Expression::String(token_reference),
-                                    } => Some(token_reference.token().to_string()),
+                                        expression,
+                                    } => match expression.as_ref() {
+                                        ast::Expression::String(token_reference) => {
+                                            Some(token_reference.token().to_string())
+                                        }
+                                        _ => None,
+                                    },
                                     ast::Index::Dot { dot: _, name } => {
                                         Some(name.token().to_string())
                                     }

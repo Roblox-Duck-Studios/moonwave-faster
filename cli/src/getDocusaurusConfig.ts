@@ -16,6 +16,52 @@ export interface GenerateConfigParams {
   autoSectionPath?: string
 }
 
+type FlagGroup = boolean | Record<string, boolean> | undefined
+
+// Turns every Docusaurus Faster flag on, except ones the user set themselves.
+// (Docusaurus treats unset keys in an object as `false`, so we can't just
+// pass the user's object through.)
+function mergeFasterFlags(userFlags: FlagGroup): FlagGroup {
+  if (typeof userFlags === "boolean") {
+    return userFlags
+  }
+
+  const flags = { ...userFlags }
+
+  // The persistent cache only works with the Rspack bundler
+  if (flags.rspackBundler === false) {
+    flags.rspackPersistentCache ??= false
+  }
+
+  for (const key of FASTER_FLAGS) {
+    flags[key] ??= true
+  }
+
+  return flags
+}
+
+// SSG worker threads (part of Faster) need this v4 flag. We only turn on this
+// one flag rather than all of v4, since v4 also changes CSS cascade layers.
+function mergeV4Flags(userFlags: FlagGroup): FlagGroup {
+  if (typeof userFlags === "boolean") {
+    return userFlags
+  }
+
+  return { removeLegacyPostBuildHeadAttribute: true, ...userFlags }
+}
+
+const FASTER_FLAGS = [
+  "swcJsLoader",
+  "swcJsMinimizer",
+  "swcHtmlMinimizer",
+  "lightningCssMinimizer",
+  "mdxCrossCompilerCache",
+  "rspackBundler",
+  "rspackPersistentCache",
+  "ssgWorkerThreads",
+  "gitEagerVcs",
+] as const
+
 export default function getDocusaurusConfig({
   codePaths,
   enablePlugins,
@@ -46,6 +92,16 @@ export default function getDocusaurusConfig({
     },
 
     ...config.docusaurus,
+
+    // Docusaurus Faster: Rspack instead of webpack, SWC instead of Babel,
+    // LightningCSS for CSS minifying, and a persistent Rspack build cache.
+    // Projects can still opt out of single flags from moonwave.toml, e.g.
+    // [docusaurus.future.faster] rspackBundler = false
+    future: {
+      ...config.docusaurus?.future,
+      v4: mergeV4Flags(config.docusaurus?.future?.v4),
+      faster: mergeFasterFlags(config.docusaurus?.future?.faster),
+    },
 
     customFields: {
       bannerImage: config.home?.bannerImage

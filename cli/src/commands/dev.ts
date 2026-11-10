@@ -1,9 +1,9 @@
-import { spawn } from "child_process"
 import chokidar from "chokidar"
 import fs from "fs-extra"
 import path from "path"
 import { Args } from "../argv.js"
 import { getBinaryPath } from "../binary.js"
+import { runDocusaurus } from "../docusaurus.js"
 import { prepareProject } from "../prepareProject.js"
 
 export default async function devCommand(args: Args) {
@@ -56,19 +56,7 @@ export default async function devCommand(args: Args) {
         }
       })
 
-    const exitCode = await new Promise((resolve) => {
-      spawn(
-        "npm" + (process.platform === "win32" ? ".cmd" : ""),
-        ["run", "start"],
-        {
-          cwd: tempDir,
-          shell: true,
-          stdio: "inherit",
-        }
-      )
-        .on("exit", resolve)
-        .on("error", console.error)
-    })
+    const exitCode = await runDocusaurus(tempDir, ["start"])
 
     if (exitCode !== 0) {
       throw new Error("Non-zero exit code")

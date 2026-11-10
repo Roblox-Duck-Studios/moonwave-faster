@@ -231,7 +231,7 @@ fn report_errors(errors: Vec<Error>, codespan_files: &SimpleFiles<String, String
         match error {
             Error::ParseErrors(diagnostics) => {
                 for diagnostic in diagnostics.into_iter() {
-                    term::emit(
+                    term::emit_to_write_style(
                         &mut writer.lock(),
                         &config,
                         codespan_files,

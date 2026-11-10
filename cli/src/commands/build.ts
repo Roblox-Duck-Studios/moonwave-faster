@@ -1,8 +1,8 @@
-import { SpawnOptions, spawn } from "child_process"
 import githubPages from "gh-pages"
 import path from "path"
 import { Args } from "../argv.js"
 import { getBinaryPath } from "../binary.js"
+import { runDocusaurus } from "../docusaurus.js"
 import { prepareProject } from "../prepareProject.js"
 
 function publish(buildDir: string): Promise<void> {
@@ -26,22 +26,11 @@ export default async function buildCommand(args: Args) {
     const buildDirName = args["out-dir"] || "build"
     const buildDir = path.join(projectDir, buildDirName)
 
-    const command = "npm" + (process.platform === "win32" ? ".cmd" : "")
-    const spawnOptions: SpawnOptions = {
-      cwd: tempDir,
-      shell: true,
-      stdio: "inherit",
-    }
-
-    const exitCode = await new Promise((resolve) => {
-      spawn(
-        command,
-        ["run", "build", "--", "--out-dir", `"${buildDir}"`],
-        spawnOptions
-      )
-        .on("exit", resolve)
-        .on("error", console.error)
-    })
+    const exitCode = await runDocusaurus(tempDir, [
+      "build",
+      "--out-dir",
+      buildDir,
+    ])
 
     if (exitCode !== 0) {
       throw new Error("Build had an non-zero exit code")

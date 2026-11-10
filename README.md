@@ -27,10 +27,33 @@ Lua is the moon. The moon is your code. The moon influences the waves in the oce
 
 [Check out the Documentation website](https://eryn.io/moonwave/)
 
+## Installing the extractor with Rokit
+
+Each release ships prebuilt `moonwave-extractor` binaries for Windows, macOS and Linux (x86_64 and ARM64), named so [Rokit](https://github.com/rojo-rbx/rokit) can install them:
+
+```sh
+rokit add Roblox-Duck-Studios/moonwave-faster moonwave-extractor
+```
+
+To make the Moonwave CLI use that binary instead of downloading its own, set `MOONWAVE_EXTRACTOR_PATH`:
+
+```sh
+MOONWAVE_EXTRACTOR_PATH=moonwave-extractor moonwave build
+```
+
+## Faster builds
+
+The generated Docusaurus site uses [Docusaurus Faster](https://docusaurus.io/blog/releases/3.6#docusaurus-faster) (Rspack, SWC and LightningCSS instead of webpack, Babel and cssnano). You can turn single flags off in `moonwave.toml`:
+
+```toml
+[docusaurus.future.faster]
+rspackBundler = false
+```
+
 ## Building in Development and Contributing
 
 Requirements:
-- [Node.js 20+](https://nodejs.org/en/)
+- [Node.js 20.19+](https://nodejs.org/en/)
 - [Rust 1.75.0 and Cargo](https://rustup.rs/)
 
 1. Clone this repository
