@@ -6,7 +6,6 @@
  * Copyright © 2018 Eryn L. K.
  *****/
 
-import fetch from "node-fetch"
 
 const dataTypes = [
   "Axes",
